@@ -1,0 +1,1 @@
+add_executable(postcard_collector postcard_collector.c)

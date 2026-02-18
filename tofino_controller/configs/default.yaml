@@ -1,0 +1,7 @@
+bfrt:
+  host: "localhost"
+  port: 50052
+  pipe_id: 65535
+  device_id: 0
+program:
+  name: null
