@@ -232,3 +232,4 @@ go.work.sum
 # data files
 results/
 output/
+artifact-evaluation/
