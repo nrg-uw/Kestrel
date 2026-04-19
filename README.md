@@ -13,16 +13,25 @@ This repository contains code for our IEEE/IFIP NOMS 2026 paper:
 ## Quickstart
 
 ```bash
-./run.sh
+docker build -t kestrel .
+./verify.sh
 ```
 
-This sets up a virtual environment, installs dependencies, and runs the
-detection pipeline on the included telemetry data. Results are written to
-`output/events.jsonl`.
+This Docker workflow runs the detection pipeline on the bundled telemetry data
+and then executes the verification tests inside the same container image.
+Results are written to `output/events.jsonl`.
 
-To process all 600 windows:
+To process all 600 windows and re-run the Dockerized tests:
 ```bash
-./run.sh --max-windows 600
+./verify.sh --max-windows 600
+```
+
+If you want to run the two Docker steps manually:
+
+```bash
+docker run --rm -v "$(pwd)/output:/kestrel/output" kestrel
+docker run --rm -v "$(pwd)/output:/kestrel/output" \
+  --entrypoint python kestrel -m pytest test_kestrel.py -v
 ```
 
 
@@ -31,7 +40,7 @@ To process all 600 windows:
 ```
 kestrel/
 ├── kestrel.py             # anomaly detection pipeline (start here)
-├── run.sh                 # setup venv and run kestrel.py
+├── verify.sh              # Docker runner: pipeline + verification
 ├── bins.json              # per-QID histogram bin edges (latency and IAT)
 ├── data/
 │   ├── cms/               # sketch register dumps from the Tofino switch
@@ -77,6 +86,12 @@ Our setup used four machines connected to an Intel Tofino switch:
 ```
 
 We release the source code for the switch P4 program, controller, telemetry collector, traffic generator, and anomaly injector. Deployment scripts use placeholder hostnames and should be updated to match your environment.
+
+Most users can work directly with the bundled telemetry snapshots in `data/`
+using the Dockerized detection pipeline above. The Tofino, traffic, collector,
+and anomaly-injection components are included for users who want to study or
+extend the full deployment, but they require the original multi-host hardware
+testbed.
 
 - [`tofino/`](tofino/) — P4 program for the switch
 - [`tofino_controller/`](tofino_controller/) — BFRT gRPC controller

@@ -6,3 +6,4 @@ natsort
 tqdm
 pyarrow
 fastparquet
+pytest

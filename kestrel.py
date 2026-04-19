@@ -809,16 +809,22 @@ def print_summary(
     episodes: List[Dict],
     n_processed: int,
     out_path: Path,
+    n_qfis: int = 0,
     interrupted: bool = False,
 ) -> None:
-    sep = "-" * 60
+    W    = 62
+    sep  = "=" * W
+    thin = "-" * W
+    status = " (interrupted)" if interrupted else ""
     print(f"\n{sep}")
-    print("Summary")
-    status = "  (interrupted)" if interrupted else ""
+    print("  Kestrel Detection Summary")
+    print(thin)
     print(f"  Windows processed : {n_processed}{status}")
+    print(f"  QFIs monitored    : {n_qfis}")
     print(f"  Anomaly episodes  : {len(episodes)}")
     if episodes:
-        print()
+        print(thin)
+        print("  Detected episodes (debounced):")
         for ep in episodes:
             print(
                 f"    QFI {ep['qfi']:<3}  "
@@ -826,9 +832,10 @@ def print_summary(
                 f"{ep['duration']:>3} windows  "
                 f"peak score={ep['peak_score']:.3f}"
             )
+    print(thin)
+    suffix = " (partial)" if interrupted else ""
+    print(f"  Results written   : {out_path}{suffix}")
     print(sep)
-    suffix = "  (partial)" if interrupted else ""
-    print(f"wrote {out_path}{suffix}")
 
 
 # ---------------------------------------------------------------------------
@@ -902,11 +909,29 @@ def main():
     # -- Startup banner ------------------------------------------------------
     print()
     print("Kestrel -- anomaly detection on 5G sketch telemetry")
-    print(f"  Data   : {args.data_dir}/  ({len(all_windows)} windows available, processing first {len(cms_files)})")
-    print(f"  Model  : {args.bundle_dir}/")
+    print(f"  Data   : {args.data_dir}/  ({len(cms_files)} of {len(all_windows)} windows)")
+    print(f"  Model  : {args.bundle_dir}/xgb.json")
     print(f"  Output : {out_path}")
     print()
-    print("  Press Ctrl+C at any time to stop and print a summary.")
+    print("  Kestrel operates in two stages:")
+    print()
+    print("  Stage 1 -- Hardware Testbed (source code provided; not run here):")
+    print("    Traffic is generated and anomalies are injected into a Tofino-based 5G UPF.")
+    print("    The switch maintains per-QID Count-Min Sketches capturing latency,")
+    print("    inter-arrival time, and policer color distributions, and exports a")
+    print("    1-second snapshot every window via gRPC.")
+    print("    Source: tofino/  traffic_generator/  anomaly_injector/  anomalies/")
+    print()
+    print("  Stage 2 -- Detection pipeline (running now on provided snapshot data):")
+    print("    [1] Sketch query        reconstruct per-flow latency and IAT distributions")
+    print("    [2] Feature extraction  compute distributional signatures per tunnel (TEID)")
+    print("    [3] QFI aggregation     aggregate tunnel features to QoS flow level")
+    print("    [4] Anomaly scoring     classify each QoS flow using pre-trained XGBoost")
+    print("    [5] Debouncing          filter spurious detections into stable episode alarms")
+    print()
+    print("  Data contains injected anomalies: microburst, congestion, contention, policy abuse.")
+    print("  If anomalies are detected, ANOMALY START / END lines appear inline during processing.")
+    print("  Press Ctrl+C at any time to stop early and print a summary.")
     print()
     
     # -- Stateful components -------------------------------------------------
@@ -918,6 +943,7 @@ def main():
     n_processed  = 0
     last_win     = 0
     interrupted  = False
+    seen_qfis: set = set()
 
     # -- Ctrl+C handler ------------------------------------------------------
     def _handle_sigint(sig, frame):
@@ -985,6 +1011,7 @@ def main():
 
                 for i, row in eng_df.reset_index(drop=True).iterrows():
                     qfi      = int(row["qfi"])
+                    seen_qfis.add(qfi)
                     score    = float(scores[i])
                     thr      = float(thr_map.get(qfi, thr_global))
                     pred     = int(score >= thr)
@@ -1027,6 +1054,7 @@ def main():
         tracker.all_episodes(),
         n_processed,
         out_path,
+        n_qfis=len(seen_qfis),
         interrupted=interrupted,
     )
 
